@@ -150,17 +150,49 @@ describe("getCalendarLinks", () => {
 
     const googleLink = result.find((link) => link.id === CalendarLinkType.GOOGLE_CALENDAR);
     expect(googleLink?.link).toContain(`details=${encodeURIComponent(eventType.description)}`);
-    expect(googleLink?.link).toContain(`text=${customTitle}`);
+    expect(googleLink?.link).toContain(`text=${encodeURIComponent(customTitle)}`);
 
     // Check Office 365 link
     const microsoftOfficeLink = result.find((link) => link.id === CalendarLinkType.MICROSOFT_OFFICE);
     expect(microsoftOfficeLink?.link).toContain("body=Test%20Description");
-    expect(microsoftOfficeLink?.link).toContain(`subject=${customTitle}`);
+    expect(microsoftOfficeLink?.link).toContain(`subject=${encodeURIComponent(customTitle)}`);
 
     // Check Outlook link
     const microsoftOutlookLink = result.find((link) => link.id === CalendarLinkType.MICROSOFT_OUTLOOK);
     expect(microsoftOutlookLink?.link).toContain("body=Test%20Description");
     expect(microsoftOutlookLink?.link).toContain(`subject=${encodeURIComponent(customTitle)}`);
+  });
+
+  it("should encode reserved characters in the event name and description", async () => {
+    const title = "Q&A #1 + 100% \u00e9";
+    const description = "Agenda: a&b=c #tag +1";
+    const booking = {
+      ...baseMockBooking,
+      responses: { title, name: "Test Attendee" },
+    };
+    const eventType = { ...baseMockEventType, isDynamic: true, description };
+
+    const result = getCalendarLinks({ booking, eventType, t: mockT });
+    const encodedTitle = encodeURIComponent(title);
+    const encodedDescription = encodeURIComponent(description);
+
+    const googleLink = result.find((link) => link.id === CalendarLinkType.GOOGLE_CALENDAR)?.link ?? "";
+    expect(googleLink).toContain(`&text=${encodedTitle}&`);
+    expect(googleLink).toContain(`&details=${encodedDescription}`);
+
+    const officeLink = result.find((link) => link.id === CalendarLinkType.MICROSOFT_OFFICE)?.link ?? "";
+    expect(officeLink).toContain(`&subject=${encodedTitle}`);
+    expect(officeLink).toContain(`body=${encodedDescription}&`);
+
+    const outlookLink = result.find((link) => link.id === CalendarLinkType.MICROSOFT_OUTLOOK)?.link ?? "";
+    expect(outlookLink).toContain(`&subject=${encodedTitle}`);
+    expect(outlookLink).toContain(`body=${encodedDescription}&`);
+
+    for (const link of [googleLink, officeLink, outlookLink]) {
+      const params = new URL(link).searchParams;
+      expect(params.get("text") ?? params.get("subject")).toBe(title);
+      expect(params.get("details") ?? params.get("body")).toBe(description);
+    }
   });
 
   it("should handle recurring events - Only Google Calendar supports at the moment", async () => {
