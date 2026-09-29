@@ -110,6 +110,45 @@ describe("Check Duration Limit Tests", () => {
   });
 });
 
+describe("Check Duration Limit time zone", () => {
+  // 2022-10-01T03:30 in Asia/Kolkata, but still 2022-09-30 in UTC
+  const eventStartDate = dayjs("2022-09-30T22:00:00Z").toDate();
+
+  it("Should count bookings over the day of the organizer time zone", async () => {
+    mockGetTotalBookingDuration.mockClear();
+    mockGetTotalBookingDuration.mockResolvedValue(0);
+
+    await checkDurationLimit({
+      key: "PER_DAY",
+      limitingNumber: 60,
+      eventStartDate,
+      eventId: MOCK_DATA.id,
+      timeZone: "Asia/Kolkata",
+    });
+
+    expect(mockGetTotalBookingDuration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startDate: new Date("2022-09-30T18:30:00.000Z"),
+        endDate: new Date("2022-10-01T18:29:59.999Z"),
+      })
+    );
+  });
+
+  it("Should pass the organizer time zone through checkDurationLimits", async () => {
+    mockGetTotalBookingDuration.mockClear();
+    mockGetTotalBookingDuration.mockResolvedValue(0);
+
+    await checkDurationLimits({ PER_DAY: 60 }, eventStartDate, MOCK_DATA.id, undefined, "Asia/Kolkata");
+
+    expect(mockGetTotalBookingDuration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startDate: new Date("2022-09-30T18:30:00.000Z"),
+        endDate: new Date("2022-10-01T18:29:59.999Z"),
+      })
+    );
+  });
+});
+
 describe("Duration limit validation", () => {
   it("Should validate limit where ranges have ascending values", () => {
     expect(validateIntervalLimitOrder({ PER_DAY: 30, PER_MONTH: 60 })).toBe(true);
